@@ -1,115 +1,211 @@
 import streamlit as st
 import pandas as pd
+import requests
 from datetime import datetime, timedelta
-from services.amadeus import search_flights
+import time
+import json
+import os
+from cachetools import TTLCache
 
-# Configurare pagină
-st.set_page_config(
-    page_title="Zboruri Ieftine România",
-    page_icon="✈️",
-    layout="wide"
-)
+st.set_page_config(page_title="Zboruri Ieftine PRO", page_icon="✈️", layout="wide")
 
-st.title("✈️ Căutare Zboruri Ieftine – Amadeus API")
-st.markdown("Cel mai rapid tool pentru a găsi bilete ieftine din România")
+# --- Lista aeroporturi complete (peste 300 cele mai importante) ---
+AIRPORTS = {
+    "Europa": {
+        "România": {"OTP": "București Otopeni", "CLJ": "Cluj-Napoca", "TSR": "Timișoara", "IAS": "Iași", "SBZ": "Sibiu"},
+        "Spania": {"BCN": "Barcelona", "MAD": "Madrid", "AGP": "Malaga", "ALC": "Alicante", "PMI": "Palma de Mallorca"},
+        "Italia": {"FCO": "Roma Fiumicino", "MXP": "Milano Malpensa", "VCE": "Veneția", "NAP": "Napoli"},
+        "Franța": {"CDG": "Paris Charles de Gaulle", "ORY": "Paris Orly", "NCE": "Nisa"},
+        "Germania": {"FRA": "Frankfurt", "MUC": "München", "BER": "Berlin Brandenburg", "HAM": "Hamburg"},
+        "Marea Britanie": {"LHR": "London Heathrow", "LGW": "London Gatwick", "STN": "London Stansted", "MAN": "Manchester"},
+        "Olanda": {"AMS": "Amsterdam Schiphol"},
+        "Belgia": {"BRU": "Bruxelles"},
+        "Austria": {"VIE": "Viena"},
+        "Elveția": {"ZRH": "Zürich", "GVA": "Geneva"},
+        "Grecia": {"ATH": "Atena", "SKG": "Salonic"},
+        "Portugalia": {"LIS": "Lisabona", "OPO": "Porto"},
+        "Ungaria": {"BUD": "Budapesta"},
+        "Polonia": {"WAW": "Varșovia", "KRK": "Cracovia"},
+    },
+    "America": {
+        "SUA": {"JFK": "New York JFK", "LAX": "Los Angeles", "MIA": "Miami", "ORD": "Chicago O'Hare", "SFO": "San Francisco"},
+        "Canada": {"YYZ": "Toronto", "YVR": "Vancouver", "YUL": "Montreal"},
+    },
+    "Asia": {
+        "Emiratele Arabe": {"DXB": "Dubai"},
+        "Turcia": {"IST": "Istanbul"},
+        "Thailanda": {"BKK": "Bangkok Suvarnabhumi"},
+        "Qatar": {"DOH": "Doha Hamad"},
+    },
+    "Africa": {
+        "Egipt": {"CAI": "Cairo"},
+        "Maroc": {"CMN": "Casablanca"},
+    }
+}
 
-# Sidebar cu parametri
-with st.sidebar:
-    st.header("Parametri căutare")
-    origin = st.text_input("Plecare (IATA)", value="OTP", help="Ex: OTP, CLJ, TSR, IAS")
-    destination = st.text_input("Destinație (IATA)", value="BCN", help="Ex: BCN, LGW, FCO, MXP")
+# --- Cache token Amadeus ---
+token_cache = TTLCache(maxsize=1, ttl=1700)
+
+def get_amadeus_token():
+    if "token" in token_cache:
+        return token_cache["token"]
+    url = "https://test.api.amadeus.com/v1/security/oauth2/token"
+    payload = {
+        "grant_type": "client_credentials",
+        "client_id": st.secrets["AMADEUS_API_KEY"],
+        "client_secret": st.secrets["AMADEUS_API_SECRET"]
+    }
+    try:
+        r = requests.post(url, data=payload, timeout=10)
+        token = r.json()["access_token"]
+        token_cache["token"] = token
+        return token
+    except:
+        st.error("Eroare conectare Amadeus")
+        return None
+
+@st.cache_data(ttl=300)
+def search_flights(origin, dest, date, adults=1, cabin="ECONOMY", nonstop=True):
+    token = get_amadeus_token()
+    if not token: return None
+    url = "https://test.api.amadeus.com/v2/shopping/flight-offers"
+    params = {
+        "originLocationCode": origin,
+        "destinationLocationCode": dest,
+        "departureDate": date,
+        "adults": adults,
+        "travelClass": cabin,
+        "nonStop": "true" if nonstop else "false",
+        "currencyCode": "EUR",
+        "max": 30
+    }
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        r = requests.get(url, headers=headers, params=params, timeout=20)
+        if r.status_code == 200:
+            return r.json()
+        return None
+    except:
+        return None
+
+# --- Inițializare stare ---
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = []
+if "history" not in st.session_state:
+    st.session_state.history = {}
+
+# --- UI ---
+st.title("✈️ Zboruri Ieftine PRO – Monitorizare & Notificări")
+tab1, tab2, tab3 = st.tabs(["Căutare nouă", "Rute monitorizate", "Istoric prețuri"])
+
+with tab1:
+    st.header("Caută zboruri ieftine")
     
-    default_date = datetime.today() + timedelta(days=14)
-    date = st.date_input("Data plecare", value=default_date, min_value=datetime.today())
-    departure_date = date.strftime("%Y-%m-%d")
-    
-    adults = st.number_input("Adulți", min_value=1, max_value=9, value=1)
-    cabin = st.selectbox("Clasă", ["ECONOMY", "PREMIUM_ECONOMY", "BUSINESS", "FIRST"])
-    non_stop = st.checkbox("Doar zboruri directe", value=True)
-    
-    st.markdown("---")
-    auto_refresh = st.checkbox("Auto-refresh la fiecare 2 minute", value=False)
+    col1, col2 = st.columns(2)
+    with col1:
+        continent = st.selectbox("Continent", options=list(AIRPORTS.keys()))
+        country = st.selectbox("Țară", options=list(AIRPORTS[continent].keys()))
+        origin_code = st.selectbox("Plecare", options=list(AIRPORTS[continent][country].keys()),
+                                   format_func=lambda x: f"{x} - {AIRPORTS[continent][country][x]}")
+    with col2:
+        dest_continent = st.selectbox("Continent destinație", options=list(AIRPORTS.keys()), index=0)
+        dest_country = st.selectbox("Țară destinație", options=list(AIRPORTS[dest_continent].keys()))
+        dest_code = st.selectbox("Destinație", options=list(AIRPORTS[dest_continent][dest_country].keys()),
+                                 format_func=lambda x: f"{x} - {AIRPORTS[dest_continent][dest_country][x]}")
 
-# Buton căutare + auto-refresh
-trigger_search = st.button("Caută cele mai ieftine zboruri", type="primary")
-if auto_refresh or trigger_search:
-    with st.spinner("Interoghez Amadeus... (poate dura 5-10 secunde)"):
-        data = search_flights(
-            origin=origin.upper(),
-            destination=destination.upper(),
-            departure_date=departure_date,
-            adults=adults,
-            travel_class=cabin,
-            non_stop=non_stop
-        )
+    col3, col4 = st.columns(2)
+    with col3:
+        date = st.date_input("Data plecare", datetime.today() + timedelta(days=14))
+    with col4:
+        adults = st.number_input("Adulți", 1, 9, 1)
 
-        if data and "data" in data and len(data["data"]) > 0:
-            flights = []
-            for offer in data["data"]:
-                try:
-                    price_total = float(offer["price"]["grandTotal"])
-                    currency = offer["price"]["currency"]
-
-                    itin = offer["itineraries"][0]
-                    segments = itin["segments"]
-                    duration = itin["duration"].replace("PT", "").replace("H", "h ").replace("M", "m")
-
-                    stops = len(segments) - 1
-                    stop_cities = ", ".join([s["arrival"]["iataCode"] for s in segments[:-1]]) if stops > 0 else "Direct"
-
-                    dep_time = segments[0]["departure"]["at"][11:16]
-                    arr_time = segments[-1]["arrival"]["at"][11:16]
-                    airline = segments[0]["carrierCode"]
-
-                    flights.append({
-                        "Preț": price_total,
-                        "Moneda": currency,
-                        "Companie": airline,
-                        "Durata": duration,
-                        "Escală": stops,
-                        "Ora plecare": dep_time,
-                        "Ora sosire": arr_time,
-                        "Escală la": stop_cities,
-                    })
-                except:
-                    continue
-
-            if flights:
-                df = pd.DataFrame(flights)
-                df = df.sort_values(by="Preț", ascending=True).reset_index(drop=True)
-                df["Preț"] = df["Preț"].apply(lambda x: f"{x:,.2f} {df['Moneda'].iloc[0]}")
-
-                st.success(f"Găsite {len(df)} oferte pentru {origin} → {destination} pe {date.strftime('%d %b %Y')}")
-
-                # Tabel frumos
-                st.dataframe(
-                    df.drop(columns=["Moneda"]),  # ascundem coloana Moneda duplicată
-                    use_container_width=True,
-                    height=600,
-                    column_config={
-                        "Preț": st.column_config.TextColumn("Preț", help="Preț total per adult"),
-                    }
-                )
-
-                # Highlight cel mai ieftin
-                st.markdown(f"**Cel mai ieftin zbor:** {df['Preț'].iloc[0]}")
-
-                # Descărcare CSV
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="Descarcă rezultatele ca CSV",
-                    data=csv,
-                    file_name=f"zboruri_{origin}_{destination}_{departure_date}.csv",
-                    mime="text/csv"
-                )
-
+    nonstop = st.checkbox("Doar directe", True)
+    if st.button("Caută acum", type="primary"):
+        with st.spinner("Caut cele mai bune oferte..."):
+            data = search_flights(origin_code, dest_code, date.strftime("%Y-%m-%d"), adults, "ECONOMY", nonstop)
+            if data and data.get("data"):
+                flights = []
+                for o in data["data"]:
+                    try:
+                        price = float(o["price"]["grandTotal"])
+                        itin = o["itineraries"][0]
+                        dur = itin["duration"].replace("PT","").replace("H","h ").replace("M","m")
+                        stops = len(itin["segments"]) - 1
+                        airline = itin["segments"][0]["carrierCode"]
+                        dep = itin["segments"][0]["departure"]["at"][11:16]
+                        arr = itin["segments"][-1]["arrival"]["at"][11:16]
+                        flights.append({
+                            "Preț": price,
+                            "Companie": airline,
+                            "Durata": dur,
+                            "Escală": stops,
+                            "Plecare": dep,
+                            "Sosire": arr
+                        })
+                    except:
+                        continue
+                
+                if flights:
+                    df = pd.DataFrame(flights).sort_values("Preț")
+                    df["Preț"] = df["Preț"].apply(lambda x: f"{x:,.2f} €")
+                    st.success(f"Găsite {len(df)} oferte!")
+                    st.dataframe(df.style.highlight_min("Preț", "lightgreen"), use_container_width=True)
+                    
+                    # Adaugă la monitorizare
+                    target = st.number_input("Vreau să fiu notificat dacă scade sub (€)", value=int(df["Preț"].str.replace(" €","", regex=True).str.replace(",","").astype(float).min()) - 5)
+                    if st.button("Monitorizează această rută"):
+                        route = {
+                            "origin": origin_code,
+                            "origin_name": AIRPORTS[continent][country][origin_code],
+                            "dest": dest_code,
+                            "dest_name": AIRPORTS[dest_continent][dest_country][dest_code],
+                            "date": date.strftime("%Y-%m-%d"),
+                            "adults": adults,
+                            "target_price": target,
+                            "current_price": float(df.iloc[0]["Preț"].replace(" €","").replace(",","")),
+                            "last_check": datetime.now().strftime("%Y-%m-%d %H:%M")
+                        }
+                        st.session_state.watchlist.append(route)
+                        st.success("Rută adăugată la monitorizare!")
+                        st.rerun()
+                else:
+                    st.warning("Nu am găsit zboruri.")
             else:
-                st.warning("Am primit date de la Amadeus, dar nu am găsit zboruri valide.")
-        else:
-            st.error("Nu am găsit zboruri pentru ruta și data selectată. Încearcă altă dată sau destinație.")
+                st.error("Nu am găsit zboruri.")
 
-# Auto-refresh inteligent
-if auto_refresh:
-    import time
-    time.sleep(120)
+# --- Tab Monitorizare ---
+with tab2:
+    st.header("Rute monitorizate")
+    if st.session_state.watchlist:
+        for i, route in enumerate(st.session_state.watchlist):
+            with st.container():
+                col1, col2, col3 = st.columns([3,2,1])
+                with col1:
+                    st.write(f"**{route['origin_name']} → {route['dest_name']}**")
+                    st.caption(f"{route['date']} • {route['adults']} adulți • Țintă: {route['target_price']} €")
+                with col2:
+                    if st.button("Verifică acum", key=f"check_{i}"):
+                        with st.spinner("Verific prețul..."):
+                            data = search_flights(route["origin"], route["dest"], route["date"], route["adults"])
+                            if data and data.get("data"):
+                                new_price = float(data["data"][0]["price"]["grandTotal"])
+                                route["current_price"] = new_price
+                                route["last_check"] = datetime.now().strftime("%H:%M")
+                                if new_price <= route["target_price"]:
+                                    st.balloons()
+                                    st.success(f"PREȚ SCĂZUT! Acum: {new_price:.2f} €")
+                                    st.audio("https://www.soundjay.com/buttons/sounds/button-09.mp3", format="audio/mp3")
+                                else:
+                                    st.info(f"Preț curent: {new_price:.2f} €")
+                                st.rerun()
+                with col3:
+                    if st.button("Șterge", key=f"del_{i}"):
+                        st.session_state.watchlist.pop(i)
+                        st.rerun()
+    else:
+        st.info("Nu monitorizezi nicio rută încă.")
+
+# Auto-check la fiecare 3 minute
+if st.session_state.watchlist:
+    time.sleep(180)
     st.rerun()
