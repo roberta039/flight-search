@@ -1,10 +1,9 @@
 # services/amadeus.py
 import streamlit as st
 import requests
-import time
 from cachetools import TTLCache
 
-# Cache pentru token (valabil 30 minute)
+# Cache pentru token (valabil ~30 minute)
 token_cache = TTLCache(maxsize=1, ttl=1700)
 
 def get_amadeus_token():
@@ -20,37 +19,32 @@ def get_amadeus_token():
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     
     try:
-        response = requests.post(url, data=payload, headers=headers)
+        response = requests.post(url, data=payload, headers=headers, timeout=10)
         response.raise_for_status()
         token = response.json()["access_token"]
         token_cache["token"] = token
         return token
     except Exception as e:
-        st.error(f"Eroare autentificare Amadeus: {e}")
+        st.error("Eroare autentificare Amadeus. Verifică cheile API.")
         return None
 
-@st.cache_data(ttl=300)  # 5 minute cache per query
-def search_flights(
-    origin, destination, departure_date,
-    adults=1, travel_class="ECONOMY", non_stop=True,
-    max_results=20
-):
+@st.cache_data(ttl=300)  # cache 5 minute
+def search_flights(origin, destination, departure_date, adults=1, travel_class="ECONOMY", non_stop=True):
     token = get_amadeus_token()
     if not token:
         return None
 
     url = "https://test.api.amadeus.com/v2/shopping/flight-offers"
     headers = {"Authorization": f"Bearer {token}"}
-    
     params = {
-        "originLocationCode": origin.upper(),
-        "destinationLocationCode": destination.upper(),
+        "originLocationCode": origin,
+        "destinationLocationCode": destination,
         "departureDate": departure_date,
         "adults": adults,
         "travelClass": travel_class,
-        "nonStop": str(non_stop).lower(),
+        "nonStop": "true" if non_stop else "false",
         "currencyCode": "EUR",
-        "max": max_results
+        "max": 50
     }
 
     try:
@@ -58,12 +52,11 @@ def search_flights(
         if response.status_code == 200:
             return response.json()
         elif response.status_code == 429:
-            st.warning("Rate limit atins. Așteaptă 10 secunde...")
-            time.sleep(10)
-            return search_flights(origin, destination, departure_date, adults, travel_class, non_stop, max_results)
+            st.warning("Prea multe cereri. Așteaptă puțin...")
+            return None
         else:
-            st.error(f"Eroare API Amadeus: {response.status_code} - {response.text}")
+            st.error(f"Eroare API: {response.status_code}")
             return None
     except Exception as e:
-        st.error(f"Eroare conexiune: {e}")
+        st.error("Eroare conexiune la Amadeus.")
         return None
