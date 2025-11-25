@@ -1,40 +1,49 @@
-# app.py
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from services.amadeus import search_flights
 
-st.set_page_config(page_title="Zboruri Ieftine România", layout="wide")
-st.title(" Căutare Zboruri Ieftine (Amadeus API)")
+# Configurare pagină
+st.set_page_config(
+    page_title="Zboruri Ieftine România",
+    page_icon="✈️",
+    layout="wide"
+)
 
-# Sidebar
+st.title("✈️ Căutare Zboruri Ieftine – Amadeus API")
+st.markdown("Cel mai rapid tool pentru a găsi bilete ieftine din România")
+
+# Sidebar cu parametri
 with st.sidebar:
     st.header("Parametri căutare")
-    origin = st.text_input("Din (ex: OTP, CLJ, TSR)", "OTP")
-    destination = st.text_input("Către (ex: BCN, LGW, FCO)", "BCN")
+    origin = st.text_input("Plecare (IATA)", value="OTP", help="Ex: OTP, CLJ, TSR, IAS")
+    destination = st.text_input("Destinație (IATA)", value="BCN", help="Ex: BCN, LGW, FCO, MXP")
     
-    date = st.date_input("Data plecare", datetime.today() + timedelta(days=7))
+    default_date = datetime.today() + timedelta(days=14)
+    date = st.date_input("Data plecare", value=default_date, min_value=datetime.today())
     departure_date = date.strftime("%Y-%m-%d")
     
-    adults = st.number_input("Adulți", 1, 8, 1)
+    adults = st.number_input("Adulți", min_value=1, max_value=9, value=1)
     cabin = st.selectbox("Clasă", ["ECONOMY", "PREMIUM_ECONOMY", "BUSINESS", "FIRST"])
     non_stop = st.checkbox("Doar zboruri directe", value=True)
     
-    auto_refresh = st.checkbox(" Auto-refresh la fiecare 2 minute")
-    refresh_interval = 120 if auto_refresh else 0
+    st.markdown("---")
+    auto_refresh = st.checkbox("Auto-refresh la fiecare 2 minute", value=False)
 
-if st.button("Caută cele mai ieftine zboruri") or auto_refresh:
-    with st.spinner("Caut cele mai bune oferte..."):
+# Buton căutare + auto-refresh
+trigger_search = st.button("Caută cele mai ieftine zboruri", type="primary")
+if auto_refresh or trigger_search:
+    with st.spinner("Interoghez Amadeus... (poate dura 5-10 secunde)"):
         data = search_flights(
-            origin=origin,
-            destination=destination,
+            origin=origin.upper(),
+            destination=destination.upper(),
             departure_date=departure_date,
             adults=adults,
             travel_class=cabin,
             non_stop=non_stop
         )
-        
-                        if data and "data" in data and len(data["data"]) > 0:
+
+        if data and "data" in data and len(data["data"]) > 0:
             flights = []
             for offer in data["data"]:
                 try:
@@ -50,7 +59,6 @@ if st.button("Caută cele mai ieftine zboruri") or auto_refresh:
 
                     dep_time = segments[0]["departure"]["at"][11:16]
                     arr_time = segments[-1]["arrival"]["at"][11:16]
-
                     airline = segments[0]["carrierCode"]
 
                     flights.append({
@@ -63,7 +71,7 @@ if st.button("Caută cele mai ieftine zboruri") or auto_refresh:
                         "Ora sosire": arr_time,
                         "Escală la": stop_cities,
                     })
-                except Exception as e:
+                except:
                     continue
 
             if flights:
@@ -71,29 +79,37 @@ if st.button("Caută cele mai ieftine zboruri") or auto_refresh:
                 df = df.sort_values(by="Preț", ascending=True).reset_index(drop=True)
                 df["Preț"] = df["Preț"].apply(lambda x: f"{x:,.2f} {df['Moneda'].iloc[0]}")
 
-                st.success(f"Am găsit {len(df)} oferte!")
+                st.success(f"Găsite {len(df)} oferte pentru {origin} → {destination} pe {date.strftime('%d %b %Y')}")
 
+                # Tabel frumos
                 st.dataframe(
-                    df.style.highlight_min(subset=["Preț"], color="#90EE90")
-                           .set_properties(**{'text-align': 'center'}),
+                    df.drop(columns=["Moneda"]),  # ascundem coloana Moneda duplicată
                     use_container_width=True,
-                    height=600
+                    height=600,
+                    column_config={
+                        "Preț": st.column_config.TextColumn("Preț", help="Preț total per adult"),
+                    }
                 )
 
+                # Highlight cel mai ieftin
+                st.markdown(f"**Cel mai ieftin zbor:** {df['Preț'].iloc[0]}")
+
+                # Descărcare CSV
                 csv = df.to_csv(index=False).encode('utf-8')
                 st.download_button(
-                    "Descarcă CSV",
-                    csv,
-                    f"zboruri_{origin}_{destination}_{departure_date}.csv",
-                    "text/csv"
+                    label="Descarcă rezultatele ca CSV",
+                    data=csv,
+                    file_name=f"zboruri_{origin}_{destination}_{departure_date}.csv",
+                    mime="text/csv"
                 )
-            else:
-                st.warning("Am primit date de la Amadeus, dar nu am putut extrage zboruri valide.")
-        else:
-            st.error("Nu am găsit zboruri pentru această rută și dată. Încearcă altă dată sau destinație.")
 
-# Auto-refresh
+            else:
+                st.warning("Am primit date de la Amadeus, dar nu am găsit zboruri valide.")
+        else:
+            st.error("Nu am găsit zboruri pentru ruta și data selectată. Încearcă altă dată sau destinație.")
+
+# Auto-refresh inteligent
 if auto_refresh:
-    st.rerun() if refresh_interval else None
-    time.sleep(refresh_interval)
+    import time
+    time.sleep(120)
     st.rerun()
