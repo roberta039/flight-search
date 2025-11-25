@@ -34,7 +34,7 @@ if st.button("Caută cele mai ieftine zboruri") or auto_refresh:
             non_stop=non_stop
         )
         
-                if data and "data" in data and len(data["data"]) > 0:
+                        if data and "data" in data and len(data["data"]) > 0:
             flights = []
             for offer in data["data"]:
                 try:
@@ -64,20 +64,15 @@ if st.button("Caută cele mai ieftine zboruri") or auto_refresh:
                         "Escală la": stop_cities,
                     })
                 except Exception as e:
-                    continue  # sare peste ofertele ciudate
+                    continue
 
             if flights:
                 df = pd.DataFrame(flights)
-
-                # Sortare corectă după preț (numeric)
                 df = df.sort_values(by="Preț", ascending=True).reset_index(drop=True)
-
-                # Formatare frumoasă Preț
                 df["Preț"] = df["Preț"].apply(lambda x: f"{x:,.2f} {df['Moneda'].iloc[0]}")
 
-                st.success(f"Am găsit {len(df)} oferte excelente!")
+                st.success(f"Am găsit {len(df)} oferte!")
 
-                # Tabel ca Excel + evidențiere cel mai ieftin
                 st.dataframe(
                     df.style.highlight_min(subset=["Preț"], color="#90EE90")
                            .set_properties(**{'text-align': 'center'}),
@@ -85,18 +80,17 @@ if st.button("Caută cele mai ieftine zboruri") or auto_refresh:
                     height=600
                 )
 
-                # Descărcare CSV
-                csv = df.to_csv(index=False).encode()
+                csv = df.to_csv(index=False).encode('utf-8')
                 st.download_button(
-                    "Descarcă rezultatele CSV",
+                    "Descarcă CSV",
                     csv,
                     f"zboruri_{origin}_{destination}_{departure_date}.csv",
                     "text/csv"
                 )
             else:
-                st.warning("Am primit răspuns de la Amadeus, dar nu am putut procesa ofertele.")
+                st.warning("Am primit date de la Amadeus, dar nu am putut extrage zboruri valide.")
         else:
-            st.error("Nu am găsit zboruri pentru ruta și data selectată. Încearcă altă dată sau destinație.")
+            st.error("Nu am găsit zboruri pentru această rută și dată. Încearcă altă dată sau destinație.")
 
 # Auto-refresh
 if auto_refresh:
