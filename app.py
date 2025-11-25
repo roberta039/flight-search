@@ -92,8 +92,8 @@ def search_roundtrip(origin, dest, dep_date, ret_date, adults=1, non_stop=False,
         return None
 
 # === UI ===
-st.title("Zboruri Ieftine PRO – Doar LOW-COST (Wizz, Ryanair, EasyJet)")
-st.markdown("Găsește cele mai ieftine bilete dus-întors cu Wizz Air, Ryanair, EasyJet etc.")
+st.title("Zboruri Ieftine")
+st.markdown("Găsește cele mai ieftine bilete dus-întors")
 
 tab1, tab2 = st.tabs(["Căutare Low-Cost", "Rute Monitorizate"])
 
