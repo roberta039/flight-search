@@ -10,36 +10,156 @@ from cachetools import TTLCache
 st.set_page_config(page_title="Zboruri Ieftine PRO", page_icon="✈️", layout="wide")
 
 # --- Lista aeroporturi complete (peste 300 cele mai importante) ---
+# === LISTA COMPLETĂ AEROPORTURI 2025 – TOATE INSULELE GRECEȘTI + TOP DESTINAȚII ===
 AIRPORTS = {
     "Europa": {
-        "România": {"OTP": "București Otopeni", "CLJ": "Cluj-Napoca", "TSR": "Timișoara", "IAS": "Iași", "SBZ": "Sibiu"},
-        "Spania": {"BCN": "Barcelona", "MAD": "Madrid", "AGP": "Malaga", "ALC": "Alicante", "PMI": "Palma de Mallorca"},
-        "Italia": {"FCO": "Roma Fiumicino", "MXP": "Milano Malpensa", "VCE": "Veneția", "NAP": "Napoli"},
-        "Franța": {"CDG": "Paris Charles de Gaulle", "ORY": "Paris Orly", "NCE": "Nisa"},
-        "Germania": {"FRA": "Frankfurt", "MUC": "München", "BER": "Berlin Brandenburg", "HAM": "Hamburg"},
-        "Marea Britanie": {"LHR": "London Heathrow", "LGW": "London Gatwick", "STN": "London Stansted", "MAN": "Manchester"},
-        "Olanda": {"AMS": "Amsterdam Schiphol"},
-        "Belgia": {"BRU": "Bruxelles"},
-        "Austria": {"VIE": "Viena"},
-        "Elveția": {"ZRH": "Zürich", "GVA": "Geneva"},
-        "Grecia": {"ATH": "Atena", "SKG": "Salonic"},
-        "Portugalia": {"LIS": "Lisabona", "OPO": "Porto"},
-        "Ungaria": {"BUD": "Budapesta"},
-        "Polonia": {"WAW": "Varșovia", "KRK": "Cracovia"},
-    },
-    "America": {
-        "SUA": {"JFK": "New York JFK", "LAX": "Los Angeles", "MIA": "Miami", "ORD": "Chicago O'Hare", "SFO": "San Francisco"},
-        "Canada": {"YYZ": "Toronto", "YVR": "Vancouver", "YUL": "Montreal"},
+        "România": {
+            "OTP": "București - Henri Coandă (Otopeni)",
+            "CLJ": "Cluj-Napoca",
+            "TSR": "Timișoara",
+            "IAS": "Iași",
+            "SBZ": "Sibiu",
+            "CRA": "Craiova",
+            "BCM": "Bacău",
+            "SCV": "Suceava",
+            "TGM": "Târgu Mureș"
+        },
+        "Grecia (Continent + Insule)": {
+            "ATH": "Atena - Eleftherios Venizelos",
+            "SKG": "Salonic",
+            "HER": "Creta - Heraklion (Iraklio)",
+            "CHQ": "Creta - Chania",
+            "RHO": "Rhodos",
+            "JTR": "Santorini (Thira)",
+            "JMK": "Mykonos",
+            "CFU": "Corfu (Kerkyra)",
+            "ZTH": "Zakynthos",
+            "EFL": "Kefalonia",
+            "KLX": "Kalamata",
+            "KGS": "Kos",
+            "SMI": "Samos",
+            "AOK": "Karpathos",
+            "JSH": "Sitia (Creta)",
+            "PVK": "Preveza / Lefkada",
+            "LRS": "Leros",
+            "JIK": "Ikaria",
+            "MLO": "Milos",
+            "PAS": "Paros",
+            "JSI": "Skiathos",
+            "JTY": "Astypalaia",
+            "AXD": "Alexandroupoli"
+        },
+        "Spania (inclusiv insule)": {
+            "BCN": "Barcelona",
+            "MAD": "Madrid",
+            "AGP": "Malaga",
+            "ALC": "Alicante",
+            "PMI": "Palma de Mallorca",
+            "IBZ": "Ibiza",
+            "TFN": "Tenerife Nord",
+            "TFS": "Tenerife Sud",
+            "LPA": "Gran Canaria",
+            "ACE": "Lanzarote",
+            "VLC": "Valencia",
+            "SVQ": "Sevilla",
+            "BIO": "Bilbao"
+        },
+        "Italia": {
+            "FCO": "Roma Fiumicino",
+            "MXP": "Milano Malpensa",
+            "VCE": "Veneția Marco Polo",
+            "NAP": "Napoli",
+            "CTA": "Catania (Sicilia)",
+            "PMO": "Palermo (Sicilia)",
+            "OLB": "Olbia (Sardinia)",
+            "CAG": "Cagliari (Sardinia)",
+            "BLQ": "Bologna",
+            "FLR": "Florența",
+            "TRN": "Torino",
+            "BRI": "Bari",
+            "BDS": "Brindisi"
+        },
+        "Marea Britanie": {
+            "LHR": "London Heathrow",
+            "LGW": "London Gatwick",
+            "STN": "London Stansted",
+            "LTN": "London Luton",
+            "MAN": "Manchester",
+            "EDI": "Edinburgh",
+            "GLA": "Glasgow"
+        },
+        "Franța": {
+            "CDG": "Paris Charles de Gaulle",
+            "ORY": "Paris Orly",
+            "NCE": "Nisa",
+            "MRS": "Marseille",
+            "LYS": "Lyon",
+            "TLS": "Toulouse",
+            "BOD": "Bordeaux"
+        },
+        "Germania": {
+            "FRA": "Frankfurt",
+            "MUC": "München",
+            "BER": "Berlin Brandenburg",
+            "DUS": "Düsseldorf",
+            "HAM": "Hamburg",
+            "CGN": "Köln Bonn",
+            "STR": "Stuttgart"
+        },
+        "Alte țări Europa": {
+            "AMS": "Amsterdam (Olanda)",
+            "BRU": "Bruxelles (Belgia)",
+            "VIE": "Viena (Austria)",
+            "ZRH": "Zürich (Elveția)",
+            "GVA": "Geneva (Elveția)",
+            "PRG": "Praga (Cehia)",
+            "WAW": "Varșovia (Polonia)",
+            "KRK": "Cracovia (Polonia)",
+            "BUD": "Budapesta (Ungaria)",
+            "LIS": "Lisabona (Portugalia)",
+            "OPO": "Porto (Portugalia)",
+            "DUB": "Dublin (Irlanda)",
+            "OSL": "Oslo (Norvegia)",
+            "CPH": "Copenhaga (Danemarca)",
+            "STO": "Stockholm Arlanda (Suedia)",
+            "HEL": "Helsinki (Finlanda)"
+        }
     },
     "Asia": {
-        "Emiratele Arabe": {"DXB": "Dubai"},
-        "Turcia": {"IST": "Istanbul"},
-        "Thailanda": {"BKK": "Bangkok Suvarnabhumi"},
-        "Qatar": {"DOH": "Doha Hamad"},
+        "Turcia": {"IST": "Istanbul", "AYT": "Antalya", "ADB": "Izmir"},
+        "Emiratele Arabe": {"DXB": "Dubai", "AUH": "Abu Dhabi"},
+        "Qatar": {"DOH": "Doha"},
+        "Thailanda": {"BKK": "Bangkok Suvarnabhumi", "HKT": "Phuket", "CNX": "Chiang Mai"},
+        "Altele": {
+            "DEL": "Delhi (India)",
+            "BOM": "Mumbai (India)",
+            "SIN": "Singapore",
+            "HKG": "Hong Kong",
+            "ICN": "Seoul Incheon (Coreea)",
+            "NRT": "Tokyo Narita (Japonia)",
+            "KIX": "Osaka Kansai (Japonia)"
+        }
     },
-    "Africa": {
-        "Egipt": {"CAI": "Cairo"},
-        "Maroc": {"CMN": "Casablanca"},
+    "America": {
+        "SUA": {
+            "JFK": "New York JFK",
+            "EWR": "New York Newark",
+            "LAX": "Los Angeles",
+            "MIA": "Miami",
+            "ORD": "Chicago O'Hare",
+            "SFO": "San Francisco",
+            "LAS": "Las Vegas",
+            "MCO": "Orlando",
+            "ATL": "Atlanta",
+            "BOS": "Boston"
+        },
+        "Canada": {"YYZ": "Toronto", "YVR": "Vancouver", "YUL": "Montreal"}
+    },
+    "Africa & Orientul Mijlociu": {
+        "Egipt": {"CAI": "Cairo", "HRG": "Hurghada", "SSH": "Sharm El Sheikh"},
+        "Maroc": {"CMN": "Casablanca", "RAK": "Marrakech", "AGA": "Agadir"},
+        "Tunisia": {"TUN": "Tunis"},
+        "Israel": {"TLV": "Tel Aviv"}
     }
 }
 
