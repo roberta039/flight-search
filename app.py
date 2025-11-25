@@ -34,55 +34,69 @@ if st.button("Caută cele mai ieftine zboruri") or auto_refresh:
             non_stop=non_stop
         )
         
-        if data and "data" in data:
+                if data and "data" in data and len(data["data"]) > 0:
             flights = []
             for offer in data["data"]:
-                price = float(offer["price"]["total"])
-                currency = offer["price"]["currency"]
-                
-                itin = offer["itineraries"][0]
-                segments = itin["segments"]
-                duration = itin["duration"].replace("PT", "").replace("H", "h ").replace("M", "m")
-                
-                # Pentru zboruri cu escală
-                stops = len(segments) - 1
-                stop_cities = ", ".join([seg["arrival"]["iataCode"] for seg in segments[:-1]]) if stops > 0 else "Direct"
-                
-                departure = segments[0]["departure"]["at"][11:16]
-                arrival = segments[-1]["arrival"]["at"][11:16]
-                
-                airline = segments[0]["carrierCode"]
-                
-                flights.append({
-                    "Preț": f"{price} {currency}",
-                    "Companie": airline,
-                    "Durata": duration,
-                    "Escală": stops,
-                    "Ora plecare": departure,
-                    "Ora sosire": arrival,
-                    "Detalii escală": stop_cities,
-                    "Link rezervare": offer.get("offerId", "")
-                })
-            
-            df = pd.DataFrame(flights)
-            df = df.sort_values(by="Preț", key=lambda x: x.str.extract(r'(\d+\.?\d*)').astype(float)[0])
-            
-            st.success(f"Am găsit {len(df)} oferte!")
-            
-            # Tabel frumos ca Excel
-            st.dataframe(
-                df.style.highlight_min(subset=["Preț"], color="#90EE90")
-                       .format({"Preț": lambda x: x}),
-                use_container_width=True,
-                height=600
-            )
-            
-            # Buton descărcare CSV
-            csv = df.to_csv(index=False).encode()
-            st.download_button("Descarcă rezultate CSV", csv, "zboruri_ieftine.csv", "text/csv")
-            
+                try:
+                    price_total = float(offer["price"]["grandTotal"])
+                    currency = offer["price"]["currency"]
+
+                    itin = offer["itineraries"][0]
+                    segments = itin["segments"]
+                    duration = itin["duration"].replace("PT", "").replace("H", "h ").replace("M", "m")
+
+                    stops = len(segments) - 1
+                    stop_cities = ", ".join([s["arrival"]["iataCode"] for s in segments[:-1]]) if stops > 0 else "Direct"
+
+                    dep_time = segments[0]["departure"]["at"][11:16]
+                    arr_time = segments[-1]["arrival"]["at"][11:16]
+
+                    airline = segments[0]["carrierCode"]
+
+                    flights.append({
+                        "Preț": price_total,
+                        "Moneda": currency,
+                        "Companie": airline,
+                        "Durata": duration,
+                        "Escală": stops,
+                        "Ora plecare": dep_time,
+                        "Ora sosire": arr_time,
+                        "Escală la": stop_cities,
+                    })
+                except Exception as e:
+                    continue  # sare peste ofertele ciudate
+
+            if flights:
+                df = pd.DataFrame(flights)
+
+                # Sortare corectă după preț (numeric)
+                df = df.sort_values(by="Preț", ascending=True).reset_index(drop=True)
+
+                # Formatare frumoasă Preț
+                df["Preț"] = df["Preț"].apply(lambda x: f"{x:,.2f} {df['Moneda'].iloc[0]}")
+
+                st.success(f"Am găsit {len(df)} oferte excelente!")
+
+                # Tabel ca Excel + evidențiere cel mai ieftin
+                st.dataframe(
+                    df.style.highlight_min(subset=["Preț"], color="#90EE90")
+                           .set_properties(**{'text-align': 'center'}),
+                    use_container_width=True,
+                    height=600
+                )
+
+                # Descărcare CSV
+                csv = df.to_csv(index=False).encode()
+                st.download_button(
+                    "Descarcă rezultatele CSV",
+                    csv,
+                    f"zboruri_{origin}_{destination}_{departure_date}.csv",
+                    "text/csv"
+                )
+            else:
+                st.warning("Am primit răspuns de la Amadeus, dar nu am putut procesa ofertele.")
         else:
-            st.error("Nu am găsit zboruri sau a apărut o eroare.")
+            st.error("Nu am găsit zboruri pentru ruta și data selectată. Încearcă altă dată sau destinație.")
 
 # Auto-refresh
 if auto_refresh:
