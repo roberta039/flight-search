@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import time
 from cachetools import TTLCache
 
-st.set_page_config(page_title="Zboruri Ieftine PRO - Low-Cost", page_icon="✈️", layout="wide")
+st.set_page_config(page_title="Zboruri Ieftine", page_icon="✈️", layout="wide")
 
 # === COMPANII LOW-COST (cele mai importante) ===
 LOW_COST_AIRLINES = {
